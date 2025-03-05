@@ -1,0 +1,64 @@
+import random
+import math
+
+def area(t1, t2, t3):
+
+    a = math.sqrt((t2[0] - t3[0])**2 + (t2[1] - t3[1])**2)
+    b = math.sqrt((t1[0] - t3[0])**2 + (t1[1] - t3[1])**2)
+    c = math.sqrt((t1[0] - t2[0])**2 + (t1[1] - t2[1])**2)
+
+    angle_A = math.acos((b**2 + c**2 - a**2) / (2 * b * c))
+    area = 0.5 * b * c * math.sin(angle_A)
+    return area
+
+def point_in_triangle(px, py, t1, t2, t3):
+
+    x1, y1 = t1
+    x2, y2 = t2
+    x3, y3 = t3
+
+    area_abc = area(t1, t2, t3)
+    area_abp = area(t1, t2, (px, py))
+    area_acp = area(t1, (px, py), t3)
+    area_bcp = area(t2, (px, py), t3)
+
+    return math.isclose(area_abc, area_abp + area_acp + area_bcp)
+
+def monte_carlo_triangle(t1, t2, t3, A, B, N):
+    inside = 0
+
+    for _ in range(N):
+        x = random.uniform(0, A)
+        y = random.uniform(0, B)
+
+        if point_in_triangle(x, y, t1, t2, t3):
+            inside += 1
+
+    rectangle_area = A * B
+    triangle_area_estimate = (inside / N) * rectangle_area  
+    return triangle_area_estimate
+
+def mat_and_dispersia(estimates):
+    m = len(estimates)
+    mat = sum(estimates) / m
+    dispersia = sum((x - mat) ** 2 for x in estimates) / m
+    return mat, dispersia
+
+t1 = tuple(map(float, input("Введите координаты вершины T1 (x1, y1): ").split( )))
+t2 = tuple(map(float, input("Введите координаты вершины T2 (x2, y2): ").split( )))
+t3 = tuple(map(float, input("Введите координаты вершины T3 (x3, y3): ").split( )))
+A = float(input("Введите ширину прямоугольника: ")) 
+B = float(input("Введите высоту прямоугольника: "))
+N = int(input("Введите количество точек для оценки: "))
+
+estimates = []
+for _ in range(10):
+    estimate = monte_carlo_triangle(t1, t2, t3, A, B, N)
+    estimates.append(estimate)
+    print(f"Оценка площади треугольника {_ + 1}: {estimate}")
+
+expectation, dispersia = mat_and_dispersia(estimates)
+
+print(f"Итоговые оценки площади: {estimates}")
+print(f"Математическое ожидание: {expectation}")
+print(f"Дисперсия: {dispersia}")
