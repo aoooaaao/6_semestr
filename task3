@@ -2,31 +2,37 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-num_particles = 1000
+num_particles = 3000
 
-l = np.random.uniform(-1, 1, num_particles)
-m = np.random.uniform(-1, 1, num_particles)
-n = np.random.uniform(-1, 1, num_particles)
+l2, m2, n2 = [], [], []
 
-norm = np.sqrt(l**2 + m**2 + n**2)
-l1 = l / norm
-m1 = m / norm
-n1 = n / norm
+while len(l2) < num_particles:
 
-inside = (l1**2 + m1**2 + n1**2) <= 1
-l1 = l1[inside]
-m1 = m1[inside]
-n1 = n1[inside]
+    l = np.random.uniform(-1, 1)
+    m = np.random.uniform(-1, 1)
+    n = np.random.uniform(-1, 1)
+
+    norm = np.sqrt(l**2 + m**2 + n**2)
+    l1 = l / norm
+    m1 = m / norm
+    n1 = n / norm
+
+    if l1**2 + m1**2 + n1**2 <= 1:
+      l2.append(l1)
+      m2.append(m1)
+      n2.append(n1)
+
+p = len(l2)
+print(p)
 
 fig = plt.figure()
 grafik = fig.add_subplot(111, projection='3d')
 
-# Отображение точек
-grafik.scatter(l1, m1, n1, c='black', marker='o')
+grafik.scatter(l2, m2, n2, c='black', marker='o', alpha=0.3)
 
-grafik.set_xlabel('X (l1)')
-grafik.set_ylabel('Y (m1)')
-grafik.set_zlabel('Z (n1)')
+grafik.set_xlabel('X (l2)')
+grafik.set_ylabel('Y (m2)')
+grafik.set_zlabel('Z (n2)')
 
 grafik.set_xlim([-1, 1])
 grafik.set_ylim([-1, 1])
