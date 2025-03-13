@@ -2,25 +2,36 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-num_particles = 1000
+num_particles = 3000
 
 r = 1.0
 
-theta = np.random.uniform(0, np.pi, num_particles)
-phi = np.random.uniform(0, 2 * np.pi, num_particles)
+x1, y1, z1 = [], [], []
 
-x = r * np.sin(theta) * np.cos(phi)
-y = r * np.sin(theta) * np.sin(phi)
-z = r * np.cos(theta)
+while len(x1) < num_particles:
+
+    r = 1.0
+
+    theta = np.arccos(2 * np.random.uniform(0, 1) - 1)
+    phi = np.random.uniform(0, 2 * np.pi)
+
+
+    x = r * np.sin(theta) * np.cos(phi)
+    y = r * np.sin(theta) * np.sin(phi)
+    z = r * np.cos(theta)
+
+    x1.append(x)
+    y1.append(y)
+    z1.append(z)
 
 fig = plt.figure()
 grafik = fig.add_subplot(111, projection='3d')
 
-grafik.scatter(x, y, z, c='black', marker='o')
+grafik.scatter(x1, y1, z1, c='black', marker='o', alpha=0.3)
 
-grafik.set_xlabel('X')
-grafik.set_ylabel('Y')
-grafik.set_zlabel('Z')
+grafik.set_xlabel('X (x1)')
+grafik.set_ylabel('Y (y1)')
+grafik.set_zlabel('Z (z1)')
 
 grafik.set_xlim([-1, 1])
 grafik.set_ylim([-1, 1])
