@@ -1,0 +1,56 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+def source(energies, veroyat, num_events):
+
+    veroyat = np.array(veroyat) / np.sum(veroyat)
+
+    nakop_veroyat = np.cumsum(veroyat)
+
+    results = np.zeros(len(energies), dtype=int)
+
+    for _ in range(num_events):
+        rand_ver = np.random.rand()
+        for i, ver in enumerate(nakop_veroyat):
+            if rand_ver < ver:
+                results[i] += 1
+                break
+
+    return results
+
+num_events = 10000
+energies_5 = np.arange(1, 6)
+veroyat_5 = np.random.rand(5)
+
+energies_10 = np.arange(1, 11)
+veroyat_10 = np.random.rand(10)
+
+energies_100 = np.arange(1, 101)
+veroyat_100 = np.random.rand(100)
+
+results_5 = source(energies_5, veroyat_5, num_events)
+results_10 = source(energies_10, veroyat_10, num_events)
+results_100 = source(energies_100, veroyat_100, num_events)
+
+plt.figure(figsize=(15, 5))
+
+plt.subplot(1, 3, 1)
+plt.bar(energies_5, results_5, color='blue')
+plt.title("5 энергетических линий")
+plt.xlabel("Номер группы энергии")
+plt.ylabel("Количество частиц")
+
+plt.subplot(1, 3, 2)
+plt.bar(energies_10, results_10, color='green')
+plt.title("10 энергетических линий")
+plt.xlabel("Номер группы энергии")
+plt.ylabel("Количество частиц")
+
+plt.subplot(1, 3, 3)
+plt.bar(energies_100, results_100, color='red')
+plt.title("100 энергетических линий")
+plt.xlabel("Номер группы энергии")
+plt.ylabel("Количество частиц")
+
+plt.tight_layout()
+plt.show()
