@@ -42,7 +42,7 @@ def calculate_hits(L_values, R, num_particles):
 def plot_results(L_values, hit_percentages, R):
 
     plt.figure(figsize=(10, 6))
-    line, = plt.plot(L_values, hit_percentages, 'b-o', linewidth=2, markersize=6, label='Процент попаданий')
+    line, = plt.step(L_values, hit_percentages, 'b-o', linewidth=2, markersize=6, label='Процент попаданий')
     plt.xlabel('Расстояние от источника до центра сферы (L)')
     plt.ylabel('Процент попаданий (%)')
     plt.title(f'Зависимость процента попаданий в сферу (R={R}) от расстояния')
