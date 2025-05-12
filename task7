@@ -1,0 +1,230 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+def calculate_vertices(center, direction, half_D):
+
+    h = half_D
+
+    if np.allclose(direction, [0, 0, 1]):
+        u = np.array([1, 0, 0])
+        v = np.array([0, 1, 0])
+    elif np.allclose(direction, [0, 1, 0]):
+        u = np.array([1, 0, 0])
+        v = np.array([0, 0, 1])
+    elif np.allclose(direction, [1, 0, 0]):
+        u = np.array([0, 1, 0])
+        v = np.array([0, 0, 1])
+    else:
+        u = np.random.randn(3)
+        u -= u.dot(direction) * direction
+        u /= np.linalg.norm(u)
+        v = np.cross(direction, u)
+
+    return [
+        center - h * u - h * v - h * direction,
+        center + h * u - h * v - h * direction,
+        center + h * u + h * v - h * direction,
+        center - h * u + h * v - h * direction,
+        center - h * u - h * v + h * direction,
+        center + h * u - h * v + h * direction,
+        center + h * u + h * v + h * direction,
+        center - h * u + h * v + h * direction
+    ]
+
+
+def calculate_plsk(vertices):
+
+    plsk = []
+    faces = [
+        [0, 1, 2, 3],
+        [4, 5, 6, 7],
+        [0, 1, 5, 4],
+        [2, 3, 7, 6],
+        [1, 2, 6, 5],
+        [0, 3, 7, 4]
+    ]
+
+    for face in faces:
+        p1, p2, p3 = [vertices[i] for i in face[:3]]
+        v1 = np.array(p2) - np.array(p1)
+        v2 = np.array(p3) - np.array(p1)
+        normal = np.cross(v1, v2)
+        normal = normal / np.linalg.norm(normal)
+        A, B, C = normal
+        D = -np.dot(normal, p1)
+        plsk.append({
+            'A': A, 'B': B, 'C': C, 'D': D,
+            'vertices': [vertices[i] for i in face]
+        })
+    return plsk
+
+
+def is_inside(point, center, half_D):
+
+    x, y, z = point
+    cx, cy, cz = center
+    h = half_D
+    return (cx - h < x < cx + h and
+            cy - h < y < cy + h and
+            cz - h < z < cz + h)
+
+
+def ray_plsk_intersection(ray_origin, ray_direction, plsk):
+
+    normal = np.array([plsk['A'], plsk['B'], plsk['C']])
+    denom = np.dot(normal, ray_direction)
+
+    if abs(denom) < 1e-10:
+        return None
+
+    p0 = np.array(plsk['vertices'][0])
+    t = np.dot(p0 - ray_origin, normal) / denom
+
+    if t < 0:
+        return None
+
+    intersection = ray_origin + t * ray_direction
+
+    verts = np.array(plsk['vertices'])
+    if abs(normal[2]) > 0.9:
+        min_coords = np.min(verts[:, :2], axis=0)
+        max_coords = np.max(verts[:, :2], axis=0)
+        int_coords = intersection[:2]
+    elif abs(normal[1]) > 0.9:
+        min_coords = np.min(verts[:, [0, 2]], axis=0)
+        max_coords = np.max(verts[:, [0, 2]], axis=0)
+        int_coords = np.array([intersection[0], intersection[2]])
+    else:
+        min_coords = np.min(verts[:, 1:], axis=0)
+        max_coords = np.max(verts[:, 1:], axis=0)
+        int_coords = intersection[1:]
+
+    if (min_coords[0] <= int_coords[0] <= max_coords[0] and
+            min_coords[1] <= int_coords[1] <= max_coords[1]):
+        return intersection
+    return None
+
+
+def check_intersection(ray_origin, ray_direction, center, half_D, plsk):
+
+    if is_inside(ray_origin, center, half_D):
+        return True
+
+    intersections = []
+    for plane in plsk:
+        intersection = ray_plsk_intersection(ray_origin, ray_direction, plane)
+        if intersection is not None:
+            distance = np.linalg.norm(intersection - ray_origin)
+            intersections.append((distance, intersection))
+
+    if not intersections:
+        return False
+
+    closest_intersection = min(intersections, key=lambda x: x[0])[1]
+    return not is_inside(closest_intersection, center, half_D)
+
+
+def isotropic_direction():
+
+    theta = np.arccos(2 * np.random.random() - 1)
+    phi = 2 * np.pi * np.random.random()
+    return np.array([
+        np.sin(theta) * np.cos(phi),
+        np.sin(theta) * np.sin(phi),
+        np.cos(theta)
+    ])
+
+
+def create_cube(cube_distance, edge_length, orientation='z'):
+
+    half_D = edge_length / 2
+
+    if isinstance(orientation, str):
+        if orientation == 'x':
+            direction = np.array([1, 0, 0])
+        elif orientation == 'y':
+            direction = np.array([0, 1, 0])
+        else:
+            direction = np.array([0, 0, 1])
+    else:
+        direction = np.array(orientation) / np.linalg.norm(orientation)
+
+    center = direction * cube_distance
+    vertices = calculate_vertices(center, direction, half_D)
+    plsk = calculate_plsk(vertices)
+
+    return {
+        'center': center,
+        'half_D': half_D,
+        'plsk': plsk
+    }
+
+
+def run_simulation(cube_distance, cube_size, num_particles=100000, orientation='z'):
+
+    source_pos = np.array([0, 0, 0])
+    cube = create_cube(cube_distance, cube_size, orientation)
+    count = 0
+
+    for _ in range(num_particles):
+        direction = isotropic_direction()
+        if check_intersection(source_pos, direction, cube['center'], cube['half_D'], cube['plsk']):
+            count += 1
+
+    return count / num_particles * 100
+
+
+def run_unit_tests():
+
+    cube_size = 2
+    result = run_simulation(0, cube_size, 10000, 'z')
+    print(f"Тест 1 (источник в центре куба): {result:.2f}%")
+
+    cube_distance = cube_size / 2
+    result = run_simulation(cube_distance, cube_size, 10000, 'z')
+    print(f"Тест 2 (источник на поверхности грани): {result:.2f}%")
+
+    cube_distance = cube_size / 2 + 0.00001
+    result = run_simulation(cube_distance, cube_size, 10000, 'z')
+    print(f"Тест 3 (источник близко к грани): {result:.2f}%")
+
+    cube_distance = cube_size * np.sqrt(2) / 2
+    result = run_simulation(cube_distance, cube_size, 10000, 'z')
+    print(f"Тест 4 (источник в середине ребра): {result:.2f}%")
+
+    cube_distance = cube_size * np.sqrt(3) / 2
+    result = run_simulation(cube_distance, cube_size, 10000, 'z')
+    print(f"Тест 5 (источник в вершине): {result:.2f}%")
+
+
+def distance_dependency():
+    
+    cube_size = 1
+    distances = np.linspace(0.5, 5, 30)
+    results = []
+
+    for L in distances:
+        percent = run_simulation(L, cube_size, 10000, 'z')
+        results.append(percent)
+        print(f"L = {L:.1f}: {percent:.2f}%")
+
+    plt.figure(figsize=(8, 5))
+    plt.step(distances, results, where='post', marker='o', linestyle='-', color='b')
+    plt.xlabel('Расстояние от источника до центра куба (L)')
+    plt.ylabel('Процент попаданий (%)')
+    plt.title('Зависимость процента попаданий от расстояния')
+    plt.grid(True)
+    plt.show()
+
+
+if __name__ == "__main__":
+    run_unit_tests()
+
+    print("\nЗависимость процента попаданий от расстояния:")
+    distance_dependency()
+
+    cube_size = 1
+    cube_distance = np.linalg.norm([3, 2, 10])
+    orientation = np.array([3, 2, 10]) / cube_distance
+    percent = run_simulation(cube_distance, cube_size, 10000, orientation)
+    print(f"\nПроизвольная ориентация куба: {percent:.2f}% попаданий")
