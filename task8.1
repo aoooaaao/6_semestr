@@ -1,0 +1,376 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+def upper_plane(R, D):
+    P1 = [0, 0, D]
+    P2 = [R, 0, D]
+    P3 = [0, R, D]
+    return P1, P2, P3
+
+
+def lower_plane(R, D):
+    P4 = [0, 0, -D]
+    P5 = [R, 0, -D]
+    P6 = [0, R, -D]
+    return P4, P5, P6
+
+
+def ray():
+    theta = np.arccos(2 * np.random.random() - 1)
+    phi = 2 * np.pi * np.random.random()
+
+    direction = np.array([
+        np.sin(theta) * np.cos(phi),
+        np.sin(theta) * np.sin(phi),
+        np.cos(theta)
+    ])
+
+    norm = np.linalg.norm(direction)
+    if norm > 0:
+        direction = direction / norm
+
+    return direction
+
+
+def flateABCD(P1, P2, P3):
+    P1 = np.array(P1)
+    P2 = np.array(P2)
+    P3 = np.array(P3)
+
+    v1 = P2 - P1
+    v2 = P3 - P1
+
+    normal = np.cross(v1, v2)
+
+    normal = normal / np.linalg.norm(normal)
+
+    A, B, C = normal
+
+    D = -np.dot(normal, P1)
+
+    F = [A, B, C, D]
+
+    return F
+
+
+def crossFlat(beam, PS, F):
+    l, m, n = beam
+    xS, yS, zS = PS
+    A, B, C, D = F
+
+    denominator = A * l + B * m + C * n
+
+    if np.isclose(denominator, 0):
+        return None
+
+    t = -(A * xS + B * yS + C * zS + D) / denominator
+
+    if t < 0:
+        return None
+
+    x = xS + l * t
+    y = yS + m * t
+    z = zS + n * t
+
+    return np.array([x, y, z])
+
+
+def crossCil(RAY, PS, R):
+    l, m, n = RAY
+    x0, y0, z0 = PS
+
+    a = l ** 2 + m ** 2
+    b = 2 * (x0 * l + y0 * m)
+    c = x0 ** 2 + y0 ** 2 - R ** 2
+
+    D = b ** 2 - 4 * a * c
+
+    if D < 0:
+        return None
+
+    sqrt_D = np.sqrt(D)
+    t1 = (-b - sqrt_D) / (2 * a)
+    t2 = (-b + sqrt_D) / (2 * a)
+
+    t = None
+    if t1 >= 0 and t2 >= 0:
+        t = min(t1, t2)
+    elif t1 >= 0:
+        t = t1
+    elif t2 >= 0:
+        t = t2
+    else:
+        return None
+
+    x = x0 + l * t
+    y = y0 + m * t
+    z = z0 + n * t
+
+    return np.array([x, y, z])
+
+
+def insideFlat(R, Pcross):
+    if Pcross is None:
+        return False
+
+    x, y, _ = Pcross
+    return x ** 2 + y ** 2 <= R ** 2 + 1e-10
+
+
+def insideCil(d, Pcross, R):
+    if Pcross is None:
+        return False
+
+    x, y, z = Pcross
+
+    radius_ok = x ** 2 + y ** 2 <= R ** 2 + 1e-10
+
+    height_ok = -d <= z <= d
+
+    return radius_ok and height_ok
+
+
+def Length(Sigma):
+    if np.any(Sigma <= 0):
+        raise ValueError("Макроскопическое сечение должно быть положительным")
+
+    return 1.0 / Sigma
+
+
+def sigmaPh(E, Z):
+    return (5 / 4) * 6.651 * 1e-25 * 4 * np.sqrt(2) * (Z ** 5 / 137 ** 4) * (0.511 / E) ** 3.5
+
+
+def sigmaK(E, Z):
+    j = E / 0.511
+
+    return 6.651 * 1e-25 * 3 * Z / (8 * j) * (
+                (1 - 2 * (j + 1) / j ** 2) * np.log(2 * j + 1) + 0.5 + 4 / j - 1 / (2 * j + 1) ** 2)
+
+
+def sigma(sigmaPh, sigmaK):
+    return sigmaPh + sigmaK
+
+
+def Interaction(Pcross, RAY, L):
+    l, m, n = RAY
+    x, y, z = Pcross
+    x_int = x + L / l
+    y_int = y + L / m
+    z_int = z + L / n
+
+    return np.array([x_int, y_int, z_int])
+
+
+def cost(RAY1, RAY2):
+    l, m, n = RAY1
+    ll, mm, nn = RAY2
+
+    return (l * ll + m * mm + n * nn)
+
+
+def inObj(P, R, D):
+    x, y, z = P
+
+    if abs(z) > D:
+        return False
+
+    return x ** 2 + y ** 2 <= R ** 2
+
+
+def Eloss(cos, E):
+    return E / (1 + (E / 0.511) * (1 - cos))
+
+
+def Lottery(sigma_total, sigma_Compton, sigma_Photoelectric):
+    if sigma_total <= 0:
+        raise ValueError("Полное сечение должно быть положительным")
+
+    prob_photoelectric = sigma_Photoelectric / sigma_total
+    prob_compton = sigma_Compton / sigma_total
+
+    rand = np.random.rand()
+
+    if rand < prob_photoelectric:
+        return "Photoelectric"
+    else:
+        return "Compton"
+
+
+def process_interaction(interaction_type, beam, E):
+    if interaction_type == "Photoelectric":
+        return None, E, None
+    elif interaction_type == "Compton":
+        new_beam = ray()
+        cos_theta = np.dot(beam, new_beam)
+        E_new = Eloss(cos_theta, E)
+        E_lost = E - E_new
+        return new_beam, E_lost, E_new
+    else:
+        raise ValueError("Неизвестный тип взаимодействия")
+
+
+if __name__ == "__main__":
+    R = 1
+    D = 5
+    x0 = 2
+    y0 = 2
+    z0 = 2
+    N = 10000
+
+    intersections = []
+    sigma_Ph_value = []
+    E_value = []
+
+    PS = np.array([x0, y0, z0])
+
+    P1, P2, P3 = lower_plane(R, D)
+    P4, P5, P6 = upper_plane(R, D)
+
+    F1 = flateABCD(P1, P2, P3)
+    F2 = flateABCD(P4, P5, P6)
+
+    rho_NaI = 3.67
+    M_NaI = 150
+    N_A = 6.022e23
+
+    C_ch = (1 - 0.05) / 1024
+    counters = [0] * 1024
+
+    n_NaI = (rho_NaI * N_A) / M_NaI
+    n_Na = n_NaI
+    n_I = n_NaI
+    event_info = []
+
+    for i in range(N):
+        E = 0.662
+        interaction_history = []
+
+        while E > 0:
+            beam = ray()
+
+            P_cross_1 = crossFlat(beam, PS, F1)
+            P_cross_2 = crossFlat(beam, PS, F2)
+            P_cross_side = crossCil(beam, PS, R)
+
+            valid_points = []
+
+            if insideFlat(R, P_cross_1):
+                valid_points.append(P_cross_1)
+            if insideFlat(R, P_cross_2):
+                valid_points.append(P_cross_2)
+            if insideCil(D, P_cross_side, R):
+                valid_points.append(P_cross_side)
+
+            if valid_points:
+                distances = [np.linalg.norm(p - PS) for p in valid_points]
+                closest_point = valid_points[np.argmin(distances)]
+                sigma_Ph_Na = sigmaPh(E, 11)
+                sigma_Ph_I = sigmaPh(E, 53)
+                sigma_Ph = (sigma_Ph_Na + sigma_Ph_I) * n_I
+                sigma_K_Na = sigmaK(E, 11)
+                sigma_K_I = sigmaK(E, 53)
+                sigma_K = 6.02 * 1e23 * ((11 / 23) * sigma_K_Na + (53 / 127) * sigma_K_I)
+                sigma_NaI = sigma(sigma_Ph, sigma_K)
+                L = Length(sigma_NaI)
+                P_int = Interaction(closest_point, beam, L)
+
+                if inObj(P_int, R, D):
+                    sigma_Ph_Na = sigmaPh(E, 11) * n_Na
+                    sigma_Ph_I = sigmaPh(E, 53) * n_I
+                    sigma_Ph_total = sigma_Ph_Na + sigma_Ph_I
+
+                    sigma_K_Na = sigmaK(E, 11) * n_Na
+                    sigma_K_I = sigmaK(E, 53) * n_I
+                    sigma_K_total = sigma_K_Na + sigma_K_I
+
+                    sigma_total = sigma_Ph_total + sigma_K_total
+
+                    interaction_type = Lottery(sigma_total, sigma_K_total, sigma_Ph_total)
+
+                    new_beam, E_lost, E_new = process_interaction(interaction_type, beam, E)
+
+                    Nch = round(E_lost / C_ch)
+                    interaction_data = {
+                        'channel': Nch,
+                        'energy': E_lost,
+                        'type': interaction_type,
+                        'remaining_energy': E_new if interaction_type == "Compton" else 0
+                    }
+                    interaction_history.append(interaction_data)
+
+                    if 0 <= Nch < 1024:
+                        counters[Nch] += 1
+
+                        if 400 <= Nch <= 600:
+                            event_info.append({
+                                'event_id': i,
+                                'interaction': interaction_data,
+                                'total_energy': sum([x['energy'] for x in interaction_history])
+                            })
+
+                    if interaction_type == "Compton":
+                        E = E_new
+                        beam = new_beam
+                    else:
+                        E = 0
+
+    print("События в каналах 400-600:")
+    print("{:<10} {:<15} {:<20} {:<15} {:<15}".format(
+        "Event ID", "Channel", "Energy (MeV)", "Interaction", "Total Energy"))
+    print("-" * 75)
+
+    for event in event_info:
+        if 400 <= event['interaction']['channel'] <= 600:
+            print("{:<10} {:<15} {:<20.4f} {:<15} {:<15.4f}".format(
+                event['event_id'],
+                event['interaction']['channel'],
+                event['interaction']['energy'],
+                event['interaction']['type'],
+                event['total_energy']))
+
+    channels = np.arange(1024)
+    plt.figure(figsize=(12, 6))
+    plt.plot(channels, counters, 'g-', linewidth=1)
+    plt.xlabel('Номер канала', fontsize=12)
+    plt.ylabel('Количество событий', fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.xlim(1, 1024)
+    plt.tight_layout()
+    plt.show()
+
+    energies = np.linspace(0.05, 1.0, 100)
+
+    sigma_ph_Na = [sigmaPh(E, 11) for E in energies]
+    sigma_k_Na = [sigmaK(E, 11) for E in energies]
+    sigma_tot_Na = [ph + k for ph, k in zip(sigma_ph_Na, sigma_k_Na)]
+
+    sigma_ph_I = [sigmaPh(E, 53) for E in energies]
+    sigma_k_I = [sigmaK(E, 53) for E in energies]
+    sigma_tot_I = [ph + k for ph, k in zip(sigma_ph_I, sigma_k_I)]
+
+    plt.figure(figsize=(12, 8))
+
+    plt.subplot(2, 1, 1)
+    plt.plot(energies, sigma_ph_Na, label='Фотоэффект (Na)')
+    plt.plot(energies, sigma_k_Na, label='Комптон (Na)')
+    plt.plot(energies, sigma_tot_Na, label='Полное (Na)', linestyle='--')
+    plt.title('Сечения взаимодействия для Натрия (Z=11)')
+    plt.xlabel('Энергия (МэВ)')
+    plt.ylabel('Сечение (см²/атом)')
+    plt.legend()
+    plt.grid(True, which="both", ls="-")
+
+    plt.subplot(2, 1, 2)
+    plt.plot(energies, sigma_ph_I, label='Фотоэффект (I)')
+    plt.plot(energies, sigma_k_I, label='Комптон (I)')
+    plt.plot(energies, sigma_tot_I, label='Полное (I)', linestyle='--')
+    plt.title('Сечения взаимодействия для Йода (Z=53)')
+    plt.xlabel('Энергия (МэВ)')
+    plt.ylabel('Сечение (см²/атом)')
+    plt.legend()
+    plt.grid(True, which="both", ls="-")
+
+    plt.tight_layout()
+    plt.show()
